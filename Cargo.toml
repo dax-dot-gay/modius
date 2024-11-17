@@ -1,0 +1,10 @@
+[package]
+name = "modius"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-channel = "2.3.1"
+libp2p = { version = "0.54.1", features = ["full"] }
+serde = { version = "1.0.215", features = ["alloc", "derive"] }
+tokio = { version = "1.41.1", features = ["full", "sync"] }
