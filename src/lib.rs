@@ -4,7 +4,7 @@ use async_channel::{Receiver, Sender};
 use chrono::Utc;
 use derive_builder::Builder;
 use libp2p::{identity::{Keypair, PublicKey}, PeerId};
-use net::{command::Command, event::Event};
+use net::{command::CommandWrapper, event::Event};
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use util::Peer;
@@ -23,14 +23,20 @@ pub struct Node {
     #[builder(default = "String::from(Utc::now().timestamp().to_string() + \".modius\")")]
     pub name: String,
 
+    #[builder(default = "String::from(\"modius.generic\")")]
+    pub group: String,
+
+    #[builder(default = "8000")]
+    pub port: usize,
+
     #[builder(setter(skip))]
-    pub commands: Option<Sender<Command>>,
+    pub commands: Option<Sender<CommandWrapper>>,
 
     #[builder(setter(skip))]
     pub events: Option<Receiver<Event>>,
 
     #[builder(setter(skip))]
-    pub thread: Option<Arc<JoinHandle<()>>>
+    pub thread: Option<Arc<JoinHandle<Result<(), Box<dyn Error>>>>>
 }
 
 impl NodeBuilder {
@@ -53,7 +59,9 @@ impl NodeBuilder {
 pub struct SavedNode {
     pub key: Vec<u8>,
     pub peers: Vec<util::Peer>,
-    pub name: String
+    pub name: String,
+    pub group: String,
+    pub port: usize
 }
 
 impl SavedNode {
@@ -63,6 +71,8 @@ impl SavedNode {
             key: key.clone(),
             peers: self.peers.clone(),
             name: self.name.clone(),
+            group: self.group.clone(),
+            port: self.port,
             commands: None,
             events: None,
             thread: None
@@ -73,7 +83,9 @@ impl SavedNode {
         SavedNode {
             key: node.key.to_protobuf_encoding().expect("Failed to parse Keypair"),
             peers: node.peers.clone(),
-            name: node.name.clone()
+            name: node.name.clone(),
+            group: node.group.clone(),
+            port: node.port
         }
     }
 }
