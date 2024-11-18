@@ -4,6 +4,8 @@ use async_channel::{Receiver, Sender};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 
+use crate::util::Peer;
+
 #[derive(Clone, Debug)]
 pub struct CommandWrapper {
     pub command: CommandKind,
@@ -15,11 +17,11 @@ impl CommandWrapper {
         self.command.clone()
     }
 
-    pub async fn respond<T: Serialize + DeserializeOwned>(&self, result: Result<T, Box<dyn Error>>) -> Result<(), serde_json::Error> {
+    pub async fn respond<T: Serialize + DeserializeOwned, E: Error + 'static>(&self, result: Result<T, E>) -> Result<(), serde_json::Error> {
         if let Ok(val) = result {
             let _ = self.response.send(Ok(serde_json::to_value(val)?)).await;
         } else if let Err(e) = result {
-            let _ = self.response.send(Err(e)).await;
+            let _ = self.response.send(Err(Box::new(e))).await;
         }
 
         Ok(())
@@ -28,7 +30,8 @@ impl CommandWrapper {
 
 #[derive(Clone, Debug)]
 pub enum CommandKind {
-    GetAddress
+    AddRendezvous(Peer),
+    AddRelay(Peer)
 }
 
 impl CommandKind {

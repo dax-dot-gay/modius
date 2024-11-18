@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum PeerType {
     Bootstrap,
     Discovered,
+    Relay
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

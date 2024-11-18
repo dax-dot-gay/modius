@@ -9,11 +9,15 @@ use libp2p::{
     futures::StreamExt,
     identity::Keypair,
     noise,
-    swarm::{NetworkBehaviour, SwarmEvent},
+    rendezvous::Namespace,
+    swarm::{DialError, NetworkBehaviour, SwarmEvent},
     tcp, yamux, PeerId, Stream, StreamProtocol, Swarm, SwarmBuilder,
 };
 
-use super::{command::CommandWrapper, event::Event};
+use super::{
+    command::{CommandKind, CommandWrapper},
+    event::Event,
+};
 
 #[derive(NetworkBehaviour)]
 struct Behaviour {
@@ -22,6 +26,8 @@ struct Behaviour {
     pub mdns: libp2p::mdns::tokio::Behaviour,
     pub upnp: libp2p::upnp::tokio::Behaviour,
     pub identify: libp2p::identify::Behaviour,
+    pub rendezvous: libp2p::rendezvous::client::Behaviour,
+    pub relay: libp2p::relay::client::Behaviour,
 }
 
 enum LoopEvent {
@@ -58,7 +64,8 @@ impl Client {
                 noise::Config::new,
                 yamux::Config::default,
             )?
-            .with_behaviour(|key| Behaviour {
+            .with_relay_client(noise::Config::new, yamux::Config::default)?
+            .with_behaviour(|key, relay| Behaviour {
                 stream: libp2p_stream::Behaviour::new(),
                 ping: libp2p::ping::Behaviour::default(),
                 mdns: libp2p::mdns::tokio::Behaviour::new(
@@ -71,6 +78,8 @@ impl Client {
                     String::from("/modius/1.0.0"),
                     key.public(),
                 )),
+                rendezvous: libp2p::rendezvous::client::Behaviour::new(key.clone()),
+                relay,
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
@@ -90,6 +99,30 @@ impl Client {
     }
 
     async fn handle_command(&mut self, command: CommandWrapper) -> Result<(), Box<dyn Error>> {
+        if let Ok(mut swarm) = self.swarm.clone().lock() {
+            let result: Result<(), Box<dyn Error>> = match command.clone().kind() {
+                CommandKind::AddRelay(peer) => {
+                    command.respond(swarm.dial(peer.address)).await?;
+                    Ok(())
+                }
+                CommandKind::AddRendezvous(peer) => {
+                    match swarm.dial(peer.address) {
+                        Ok(_) => {
+                            command
+                                .respond(swarm.behaviour_mut().rendezvous.register(
+                                    Namespace::from_static("modius"),
+                                    peer.id,
+                                    None,
+                                ))
+                                .await?
+                        }
+                        Err(e) => command.respond::<(), DialError>(Err(e)).await?,
+                    }
+                    Ok(())
+                }
+            };
+        }
+
         Ok(())
     }
 

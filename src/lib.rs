@@ -46,6 +46,12 @@ impl NodeBuilder {
         Ok(())
     }
 
+    pub fn try_relay<I: AsRef<str>, A: AsRef<str>>(&mut self, id: I, addr: A) -> Result<(), Box<dyn Error>> {
+        self.with_peer(Peer::try_new(util::PeerType::Relay, id, addr)?);
+
+        Ok(())
+    }
+
     pub fn with_peer(&mut self, peer: Peer) -> () {
         if let Some(ref mut peers) = self.peers {
             peers.push(peer);
